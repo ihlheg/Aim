@@ -1,0 +1,42 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Camera = game.Workspace.CurrentCamera
+
+-- Cấu hình khoảng cách và tốc độ
+local AimingSpeed = 5
+local MaxDistance = 100
+
+-- Hàm tìm kiếm đầu của người chơi
+local function getHeadPosition(player)
+    local character = player.Character
+    if character and character:FindFirstChild("Head") then
+        return character.Head.Position
+    end
+    return nil
+end
+
+-- Hàm aim vào đầu người chơi
+local function aimAtPlayer(player)
+    local headPosition = getHeadPosition(player)
+    if headPosition then
+        local direction = (headPosition - Camera.CFrame.Position).unit
+        local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, headPosition)
+
+        -- Tạo một tween để làm mượt chuyển động
+        local tweenService = game:GetService("TweenService")
+        local goal = {CFrame = targetCFrame}
+        local tweenInfo = TweenInfo.new(AimingSpeed, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+        local tween = tweenService:Create(Camera, tweenInfo, goal)
+
+        tween:Play()
+    end
+end
+
+-- Lắng nghe sự kiện và aim vào người chơi
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        -- Kiểm tra aim vào đầu khi có người chơi xuất hiện
+        wait(1)  -- Chờ một chút để chắc chắn rằng người chơi đã vào game
+        aimAtPlayer(player)
+    end)
+end)
