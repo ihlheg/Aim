@@ -1,42 +1,90 @@
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local Camera = game.Workspace.CurrentCamera
+local player = game.Players.LocalPlayer
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name = "AimBotGUI"
+gui.ResetOnSpawn = false
 
--- Cấu hình khoảng cách và tốc độ
-local AimingSpeed = 5
-local MaxDistance = 100
+-- Nút điều khiển
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 150, 0, 45) -- 🔧 Đã chỉnh nhỏ lại
+button.Position = UDim2.new(0.5, -75, 0.85, -22) -- Cân giữa cho nút nhỏ
+button.Text = "AimBot:OFF"
+button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+button.TextColor3 = Color3.new(1, 1, 1)
+button.Font = Enum.Font.SourceSansBold
+button.TextSize = 20
+button.Parent = gui
+button.Active = true
+button.Draggable = true
 
--- Hàm tìm kiếm đầu của người chơi
-local function getHeadPosition(player)
-    local character = player.Character
-    if character and character:FindFirstChild("Head") then
-        return character.Head.Position
-    end
+local AimRunning = false
+local CurrentTarget = nil
+
+-- Xác định vai trò người chơi
+local function getPlayerRole()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local group = char and char.Parent
+    if group and group.Name == "Killers" then return "Killers"
+    elseif group and group.Name == "Survivors" then return "Survivors" end
     return nil
 end
 
--- Hàm aim vào đầu người chơi
-local function aimAtPlayer(player)
-    local headPosition = getHeadPosition(player)
-    if headPosition then
-        local direction = (headPosition - Camera.CFrame.Position).unit
-        local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, headPosition)
+-- Tìm mục tiêu phù hợp
+local function findTarget(targetGroup)
+    local camera = workspace.CurrentCamera
+    local candidates = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(targetGroup)
+    if not candidates then return nil end
 
-        -- Tạo một tween để làm mượt chuyển động
-        local tweenService = game:GetService("TweenService")
-        local goal = {CFrame = targetCFrame}
-        local tweenInfo = TweenInfo.new(AimingSpeed, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
-        local tween = tweenService:Create(Camera, tweenInfo, goal)
-
-        tween:Play()
+    local closest, shortest = nil, math.huge
+    for _, model in pairs(candidates:GetChildren()) do
+        local hrp = model:FindFirstChild("HumanoidRootPart")
+        if model:FindFirstChildOfClass("Humanoid") and hrp then
+            local screenPos, visible = camera:WorldToViewportPoint(hrp.Position)
+            if visible then
+                local distance = (Vector2.new(screenPos.X, screenPos.Y) - camera.ViewportSize / 2).Magnitude
+                if distance < shortest then
+                    closest, shortest = hrp, distance
+                end
+            end
+        end
     end
+    return closest
 end
 
--- Lắng nghe sự kiện và aim vào người chơi
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(character)
-        -- Kiểm tra aim vào đầu khi có người chơi xuất hiện
-        wait(1)  -- Chờ một chút để chắc chắn rằng người chơi đã vào game
-        aimAtPlayer(player)
+-- Bắt đầu AimBot
+local function startAimBot()
+    if AimRunning then return end
+    AimRunning = true
+
+    local role = getPlayerRole()
+    if not role then warn("Vai trò chưa xác định") return end
+
+    local targetGroup = role == "Killers" and "Survivors" or "Killers"
+    CurrentTarget = findTarget(targetGroup)
+    if not CurrentTarget then warn("Không tìm thấy mục tiêu phù hợp") return end
+
+    task.spawn(function()
+        while AimRunning and CurrentTarget do
+            workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, CurrentTarget.Position)
+            task.wait(0.05)
+        end
     end)
+end
+
+-- Tắt AimBot
+local function stopAimBot()
+    AimRunning = false
+    CurrentTarget = nil
+end
+
+-- Xử lý sự kiện nút
+button.MouseButton1Click:Connect(function()
+    if AimRunning then
+        stopAimBot()
+        button.Text = "AimBot:OFF"
+        button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    else
+        startAimBot()
+        button.Text = "AimBot:ON"
+        button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    end
 end)
